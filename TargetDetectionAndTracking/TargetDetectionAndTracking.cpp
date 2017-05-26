@@ -54,7 +54,6 @@ char g_ImgName[100] = "C:\\Users\\liupengfei\\Desktop\\data(4.23)\\data(4.23)\\d
 //char g_ImgName[100] = "C:\\Users\\liupengfei\\Desktop\\data(4.23)\\data(4.23)\\egtest02\\imgs\\";
 int readImage(int iImageIndex, cv::Mat &src_frame, int flags = cv::IMREAD_GRAYSCALE)
 {
-	
 	char imgName[100] = {0};
 	sprintf(imgName,"%simg%05d.jpg",g_ImgName,iImageIndex);
 	//sprintf(imgName,"%sframe%05d.jpg",g_ImgName,iImageIndex*VIDEO_FRAME_INTERVAL + 1);
@@ -511,7 +510,7 @@ int threeFrameDiff(int &iImageIndex, vector<cv::Rect> &objectRect)
 	iIndex ++; iImageIndex+=VIDEO_FRAME_INTERVAL_DETECTIVE;
 	if(readImage(iImageIndex, src_frame[iIndex], CV_LOAD_IMAGE_COLOR) == -1)return -1;
 	if(readImage(iImageIndex, src_gray_frame[iIndex%MAX_FRAME], CV_LOAD_IMAGE_GRAYSCALE) == -1)return -1;
-	cv::blur(src_gray_frame[iIndex], src_gray_frame[iIndex], cv::Size(5,5));
+	cv::blur(src_gray_frame[iIndex], src_gray_frame[iIndex], cv::Size(3,3));
 #endif
 
 	//获取图片大小
@@ -523,7 +522,7 @@ int threeFrameDiff(int &iImageIndex, vector<cv::Rect> &objectRect)
 		double timestamp = clock() / 100.;
 		//加载源图像
 		iImageIndex+=VIDEO_FRAME_INTERVAL_DETECTIVE;
-		//if(readImage(iImageIndex, src_frame[iIndex%MAX_FRAME], CV_LOAD_IMAGE_COLOR) == -1)return -1;
+		if(readImage(iImageIndex, src_frame[iIndex%MAX_FRAME], CV_LOAD_IMAGE_COLOR) == -1)return -1;
 		if(readImage(iImageIndex, src_gray_frame[iIndex%MAX_FRAME], CV_LOAD_IMAGE_GRAYSCALE) == -1)return -1;
 		cout<<"\n###### Image: "<< iImageIndex <<"st\tin"<<iIndex<<" #####\t"<<endl;
 
@@ -586,10 +585,11 @@ int threeFrameDiff(int &iImageIndex, vector<cv::Rect> &objectRect)
 		cv::threshold(pyr,pyr,1,255,THRESH_BINARY);
 		pyr.convertTo(dst_frame,CV_8UC1);
 #else
+		//cv::erode(mhi, dst_frame, cv::Mat(),cv::Point(-1,-1), 1);
 		cv::dilate(mhi, dst_frame, cv::Mat(),cv::Point(-1,-1), 3);
+		cv::erode(dst_frame, dst_frame, cv::Mat(),cv::Point(-1,-1), 2);
 		//cv::dilate(mhi, dst_frame, cv::Mat(),cv::Point(-1,-1), 3);
-		//cv::erode(mhi, dst_frame, cv::Mat(),cv::Point(-1,-1), 3);
-		cv::erode(dst_frame, dst_frame, cv::Mat(),cv::Point(-1,-1), 3);
+		
 		cv::threshold(dst_frame,dst_frame,1,255,THRESH_BINARY);
 		dst_frame.convertTo(dst_frame,CV_8UC1);
 #endif
@@ -695,7 +695,7 @@ int threeFrameDiff1(int &iImageIndex, vector<cv::Rect> &rect)
 
 		//cv::imshow("absdiff",dst_frame);
 		//cv::threshold(dst_frame,dst_frame,20,255,CV_THRESH_BINARY);
-		cv::erode(dst_frame, dst_frame, cv::Mat(),cv::Point(-1,-1),2);
+		cv::erode(dst_frame, dst_frame, cv::Mat(),cv::Point(-1,-1),3);
 		//cv::morphologyEx(dst_frame, dst_frame, cv::MORPH_OPEN, cv::Mat(3,3,CV_8U,cv::Scalar(1)), cv::Point(-1,-1), 2);
 		cv::dilate(dst_frame, dst_frame, cv::Mat(),cv::Point(-1,-1),3);
 
