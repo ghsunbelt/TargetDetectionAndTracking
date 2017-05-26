@@ -467,7 +467,7 @@ int tracingByMeanshift(int &iImageIndex, RectVector &objectRect)
 			calcBackProject(&hue, 1, 0, hist[i], backproj, &phranges);
 			/*RotatedRect trackBox = */
 			if(meanShift(backproj, tmpRect,\
-				TermCriteria( CV_TERMCRIT_EPS | CV_TERMCRIT_ITER, 10, 1 ))==0)continue;
+				TermCriteria( CV_TERMCRIT_EPS /*| CV_TERMCRIT_ITER*/, 20, 0.5 ))==0)continue;
 			else if(tmpRect.area() < CONTOUR_MAX_AERA && tmpRect.area() > CONTOUR_MIN_AERA)
 			{
 				objectRect[i] = tmpRect;
