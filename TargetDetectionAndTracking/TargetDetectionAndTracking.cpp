@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 #include <iostream>
-#include <queue>
 #include <stdint.h>
 #include <cmath>
 #include <opencv2/opencv.hpp>
@@ -10,24 +9,60 @@
 #include <features2d/features2d.hpp>
 #include <nonfree/nonfree.hpp>
 #include <vector>
+#include <time.h> 
+
+#include "camshiftdemo.h"
 
 using namespace std;
-//#define MAX(a,b) ((a)>(b)?(a):(b))
-//#define MIN(a,b) ((a)<(b)?(a):(b))
-#define VIDEO_FRAME_INTERVAL 3
+using namespace cv;
+
 typedef std::vector<cv::KeyPoint> KeyPointVector;
 typedef std::vector<cv::Point2f> Point2fVector;
 typedef std::vector<cv::DMatch> DMatchVector;
+typedef std::vector<cv::Mat> MatVector;
+typedef std::vector<cv::Rect> RectVector;
+//#define MAX(a,b) ((a)>(b)?(a):(b))
+//#define MIN(a,b) ((a)<(b)?(a):(b))
 
+#define PAUSE system("pause")
 
-char g_ImgName[100] = "C:\\Users\\liupengfei\\Desktop\\data(4.23)\\data(4.23)\\data1\\imgs\\";
-int iDelay = 200;
+#define USE_SIFT 1
+
+#define USET_SAUSAC (0&&USE_SIFT)
+
+#define PYR_DOWN_UP 0
+
+#define USE_TRACERING 1
+
+#define VIDEO_FRAME_INTERVAL_DETECTIVE 4
+#define VIDEO_FRAME_INTERVAL_TRACE 1
+#define MAX_FRAME 3
+
+#define CONTOUR_MAX_AERA 8000
+#define CONTOUR_MIN_AERA 250
+
+int iDelay = 10;
+const double MHI_DURATION = 1;
+
 
 void equalizeHistColorImage(cv::Mat src, cv::Mat &dst);
 void printImage(cv::Mat image, char *file);
 void threshold(const cv::Mat &src, cv::Mat &dst, double thresh, double maxVal, int thresholdType);
 void absdiff(const cv::Mat &src1, const cv::Mat &src2, cv::Mat &dst);
-cv::Point2f getTransformPoint(const cv::Point2f originalPoint, const cv::Mat &transformMaxtri);
+
+char g_ImgName[100] = "C:\\Users\\liupengfei\\Desktop\\data(4.23)\\data(4.23)\\data2\\imgs\\";
+//char g_ImgName[100] = "C:\\Users\\liupengfei\\Desktop\\data(4.23)\\data(4.23)\\egtest02\\imgs\\";
+int readImage(int iImageIndex, cv::Mat &src_frame, int flags = cv::IMREAD_GRAYSCALE)
+{
+	
+	char imgName[100] = {0};
+	sprintf(imgName,"%simg%05d.jpg",g_ImgName,iImageIndex);
+	//sprintf(imgName,"%sframe%05d.jpg",g_ImgName,iImageIndex*VIDEO_FRAME_INTERVAL + 1);
+	src_frame = cv::imread(imgName, flags);
+	if( !src_frame.data )
+		return -1;
+	return 0;
+}
 
 // 彩色图像二值化
 void threshold(const cv::Mat &src, cv::Mat &dst, double thresh, double maxVal, int thresholdType)
@@ -172,7 +207,7 @@ void absdiff(const cv::Mat &src1, const cv::Mat &src2, cv::Mat &dst)
 						data3[1] = abs(data2[1] - data1[1]); 
 						data3[2] = abs(data2[2] - data1[2]);
 					}
-						//cout <<src2.rows<<" "<<src2.cols<<" "<< y <<","<<x<<"\t"<<B<<" "<<R<<" "<<G<<endl;
+					//cout <<src2.rows<<" "<<src2.cols<<" "<< y <<","<<x<<"\t"<<B<<" "<<R<<" "<<G<<endl;
 				}
 			}
 		}
@@ -210,7 +245,7 @@ void printImage(cv::Mat img, char *file)
 	uint8_t x[3];
 	for(int row=0;row<img.rows;row++)
 	{
-		
+
 		for(int col = 0;col<img.cols;col++)
 		{
 			if(col%30 == 0)printf("\n");
@@ -261,7 +296,7 @@ int getOptimalPointPairs(\
 	vector<cv::DMatch> &matchePoints, const KeyPointVector &keyPoint1, const KeyPointVector &keyPoint2,\
 	Point2fVector &points1, Point2fVector &points2, unsigned int N = 0)
 {
-	cout<<"##"<<N<<" "<<matchePoints.size()<<endl;
+	//cout<<"##"<<N<<" "<<matchePoints.size()<<endl;
 	assert(N>=0 && N<=matchePoints.size());
 
 	if(N == 0)N = matchePoints.size();
@@ -312,7 +347,7 @@ int optimizeMatcherByRansac( DMatchVector &matchePoints, \
 	return matchePoints.size();
 }
 
-// sift算法
+//sift算法
 int getHomoMatBySift(const cv::Mat &src1, const cv::Mat &src2, cv::Mat &transMat)
 {
 	//提取特征点
@@ -331,18 +366,21 @@ int getHomoMatBySift(const cv::Mat &src1, const cv::Mat &src2, cv::Mat &transMat
 
 	//cv::Mat img_match;  
 	//drawMatches(src1, keyPoint1, src2, keyPoint2, matchePoints, img_match);//,Scalar::all(-1),Scalar::all(-1),vector<char>(),drawmode);  
-	cout<<"number of matched points: "<< matchePoints.size() << endl; 
+	//cout<<"number of matched points: "<< matchePoints.size() << endl; 
 
 	//获取排在前N个的最优匹配特征点 
 	Point2fVector points1, points2;
 	getOptimalPointPairs(matchePoints, keyPoint1, keyPoint2, points1, points2, min<int>(20, matchePoints.size()));
 	//cv::imshow( "source1_window", src_frame1 );
 	//cv::imshow( "source2_window", src_frame2 );
+
+#if (USET_SAUSAC)
 	//利用基础矩阵剔除误匹配点
-	if(optimizeMatcherByRansac(matchePoints, keyPoint1, keyPoint2, points1, points2, &src1, &src2)<=0)
+	if(optimizeMatcherByRansac(matchePoints, keyPoint1, keyPoint2, points1, points2/*, &src1, &src2*/)<=0)
 		return -1;
 	getOptimalPointPairs(matchePoints, keyPoint1, keyPoint2, points1, points2, min<int>(10, matchePoints.size()));
 	//cv::destroyAllWindows();
+#endif
 
 	//获取图像1到图像2的投影映射矩阵，尺寸为3*3  
 	transMat = cv::findHomography(points1, points2, CV_FM_RANSAC);
@@ -350,108 +388,335 @@ int getHomoMatBySift(const cv::Mat &src1, const cv::Mat &src2, cv::Mat &transMat
 	return 0;
 }
 
-
-
-//计算原始图像点位在经过矩阵变换后在目标图像上对应位置  
-cv::Point2f getTransformPoint(const cv::Point2f originalPoint, const cv::Mat &transformMaxtri)
+//获得目标直方图
+int getObjectHist(const cv::Mat &src, const RectVector &objectRect, MatVector &hist)
 {
-	cv::Mat originelP, targetP;
-	originelP = (cv::Mat_<double>(3, 1) << originalPoint.x, originalPoint.y, 1.0);
-	targetP = transformMaxtri*originelP;
-	float x = targetP.at<double>(0, 0) / targetP.at<double>(2, 0);
-	float y = targetP.at<double>(1, 0) / targetP.at<double>(2, 0);
-	return cv::Point2f(x, y);
+	assert(src.data != NULL && src.channels() == 3);
+	cv::Mat hsv, hue;
+	cv::Mat mask;
+	hist.resize(objectRect.size());
+
+	cvtColor(src, hsv, cv::COLOR_BGR2HSV);
+	inRange(hsv, Scalar(0, 0, 0),\
+		Scalar(180, 256, 256), mask);
+	int ch[] = {0, 0};
+	hue.create(hsv.size(), hsv.depth());
+	cv::mixChannels(&hsv, 1, &hue, 1, ch, 1);
+
+	//计算H分量的直方图
+	int hsize = 16;//将H分量的值量化到[0, 255]
+	float hranges[] = {0,180};//H分量的取值范围是[0, 360]
+	const float* phranges = hranges;
+	for(int i=0; i<objectRect.size(); i++)
+	{
+		cv::Mat roi(hue, objectRect[i]);
+		cv::Mat maskroi(mask, objectRect[i]);
+		cv::calcHist(&roi, 1, 0, maskroi, hist[i], 1, &hsize, &phranges);
+		//cv:calcHist(&roi, 1, 0, cv::Mat(), hist, &hsize, &phranges);
+		cv::normalize(hist[i], hist[i], 0, 255, CV_MINMAX);
+	}
+
+	//画直方图
+	/*cv::Mat histimg = Mat::zeros(200, 320, CV_8UC3);
+	histimg = Scalar::all(0);
+	int binW = histimg.cols / hsize;
+	Mat buf(1, hsize, CV_8UC3);
+	for( int i = 0; i < hsize; i++ )
+	buf.at<Vec3b>(i) = Vec3b(saturate_cast<uchar>(i*180./hsize), 255, 255);
+	cvtColor(buf, buf, CV_HSV2BGR);
+	for( int i = 0; i < hsize; i++ )
+	{
+	int val = saturate_cast<int>(hist.at<float>(i)*histimg.rows/255);
+	rectangle( histimg, Point(i*binW,histimg.rows),
+	Point((i+1)*binW,histimg.rows - val),
+	Scalar(buf.at<Vec3b>(i)), -1, 8 );
+	}*/
+
+	return 0;
 }
 
-int threeFrameDiff()
+//meanshift算法
+int tracingByMeanshift(int &iImageIndex, RectVector &objectRect)
+{
+	float hranges[] = {0,180};//H分量的取值范围是[0, 360]
+	const float* phranges = hranges;
+	cv::Mat src, hsv, hue;
+	cv::Mat backproj;
+	MatVector hist;
+	int ch[] = {0,0};
+	if(readImage(iImageIndex, src, CV_LOAD_IMAGE_COLOR))return 0;
+	getObjectHist( src, objectRect, hist);
+
+	for(;;)
+	{
+		
+		iImageIndex +=VIDEO_FRAME_INTERVAL_TRACE ;
+		if(readImage(iImageIndex, src, CV_LOAD_IMAGE_COLOR) == -1)return -1;
+		cvtColor(src, hsv, cv::COLOR_RGB2HSV);
+		cout<<"\n###### Image: "<< iImageIndex<<"st #####"<<" "<<endl;
+		
+		hue.create(hsv.size(), hsv.depth());
+
+		cv::mixChannels(&hsv, 1, &hue, 1, ch, 1);
+
+		vector<bool> isValid(hist.size(), false);
+		cv::Mat tmp = src.clone();
+		int iTracedObject = 0;//检测到的目标个数
+		for(int i= 0;i<hist.size();i++)
+		{
+			cv::Rect tmpRect = objectRect[i];
+			calcBackProject(&hue, 1, 0, hist[i], backproj, &phranges);
+			/*RotatedRect trackBox = */
+			if(meanShift(backproj, tmpRect,\
+				TermCriteria( CV_TERMCRIT_EPS | CV_TERMCRIT_ITER, 10, 1 ))==0)continue;
+			else if(tmpRect.area() < CONTOUR_MAX_AERA && tmpRect.area() > CONTOUR_MIN_AERA)
+			{
+				objectRect[i] = tmpRect;
+				isValid[i] = true;
+				cv::rectangle(tmp, tmpRect, cv::Scalar(0,0,255));
+				iTracedObject++;
+			}
+		}
+		waitKey(iDelay*5);
+		cout << "目标数： "<<iTracedObject<<endl;
+		for(int i=0;i<hist.size();i++)
+			if(isValid[i])
+				cout<<objectRect[i]<<endl;
+		PAUSE;
+		if(iTracedObject == 0)break;
+		imshow("Result",tmp);
+
+	}
+	//destroyAllWindows();
+	return 0;
+}
+
+int threeFrameDiff(int &iImageIndex, vector<cv::Rect> &objectRect)
 {
 	cv::Mat dst_frame;
-	cv::Mat src_frame[3];
-	cv::Mat src_gray_frame[3];
+	cv::Mat src_frame[MAX_FRAME];
+	cv::Mat src_gray_frame[MAX_FRAME];
+	int iIndex = 0;
+	cv::Mat H12, H32;
+	cv::Mat silh, mhi;
+	cv::Size size;
+
+	//加载第一张图片并均值滤波
+	if(readImage(iImageIndex, src_frame[iIndex], CV_LOAD_IMAGE_COLOR) == -1)return -1;
+	if(readImage(iImageIndex, src_gray_frame[iIndex%MAX_FRAME], CV_LOAD_IMAGE_GRAYSCALE) == -1)return -1;
+	cv::blur(src_gray_frame[iIndex], src_gray_frame[iIndex], cv::Size(5,5));
+
+#if (MAX_FRAME==3)
+	//加载第二张图片并均值滤波
+	iIndex ++; iImageIndex+=VIDEO_FRAME_INTERVAL_DETECTIVE;
+	if(readImage(iImageIndex, src_frame[iIndex], CV_LOAD_IMAGE_COLOR) == -1)return -1;
+	if(readImage(iImageIndex, src_gray_frame[iIndex%MAX_FRAME], CV_LOAD_IMAGE_GRAYSCALE) == -1)return -1;
+	cv::blur(src_gray_frame[iIndex], src_gray_frame[iIndex], cv::Size(5,5));
+#endif
+
+	//获取图片大小
+	size = src_gray_frame[iIndex].size();
+	iIndex ++;
+	while(true)
+	{		
+		objectRect.clear();
+		double timestamp = clock() / 100.;
+		//加载源图像
+		iImageIndex+=VIDEO_FRAME_INTERVAL_DETECTIVE;
+		//if(readImage(iImageIndex, src_frame[iIndex%MAX_FRAME], CV_LOAD_IMAGE_COLOR) == -1)return -1;
+		if(readImage(iImageIndex, src_gray_frame[iIndex%MAX_FRAME], CV_LOAD_IMAGE_GRAYSCALE) == -1)return -1;
+		cout<<"\n###### Image: "<< iImageIndex <<"st\tin"<<iIndex<<" #####\t"<<endl;
+
+		/*imshow("111",src_frame[iIndex%MAX_FRAME]);
+		cv::GaussianBlur(src_frame[iIndex%MAX_FRAME], src_frame[iIndex%MAX_FRAME],  Size(13, 13),0);
+		imshow("222",src_frame[iIndex%MAX_FRAME]);
+*/
+		//图像预处理
+		cv::blur(src_gray_frame[iIndex%MAX_FRAME], src_gray_frame[iIndex%MAX_FRAME], cv::Size(3,3));
+		cv::Mat tmp1, tmp2;
+
+#if (USE_SIFT)
+		//获得透视矩阵
+#if (MAX_FRAME == 3)
+		if(getHomoMatBySift(src_gray_frame[(iIndex-2)%MAX_FRAME], src_gray_frame[(iIndex-1)%MAX_FRAME], H12) != 0)
+			continue;
+		//变换图像
+		cv::warpPerspective(src_gray_frame[(iIndex-2)%MAX_FRAME], tmp1, H12, src_gray_frame[(iIndex-1)%MAX_FRAME].size());
+		absdiff(tmp1, src_gray_frame[(iIndex-1)%MAX_FRAME], tmp1);
+#endif
+		if(getHomoMatBySift(src_gray_frame[iIndex%MAX_FRAME], src_gray_frame[(iIndex-1)%MAX_FRAME], H32) != 0)
+			continue;
+		cv::warpPerspective(src_gray_frame[iIndex%MAX_FRAME], tmp2, H32, src_gray_frame[(iIndex-1)%MAX_FRAME].size());
+		absdiff(tmp2, src_gray_frame[(iIndex-1)%MAX_FRAME], tmp2);
+		//取重叠部位
+		//printImage(src_gray_frame1,"C:\\Users\\liupengfei\\Desktop\\1.txt");
+		//printImage(src_gray_frame2,"C:\\Users\\liupengfei\\Desktop\\2.txt");
+#else	
+#if (MAX_FRAME == 3)
+		absdiff(src_gray_frame[(iIndex)%MAX_FRAME], src_gray_frame[(iIndex-1)%MAX_FRAME], tmp1);
+#endif //end (MAX_FRAME == 3)
+		absdiff(src_gray_frame[iIndex%MAX_FRAME], src_gray_frame[(iIndex-1)%MAX_FRAME], tmp2);
+#endif	//end (USE_SIFT)
+
+		//二值化操作
+#if (MAX_FRAME == 3)
+		cv::threshold(tmp1,tmp1,25,255,THRESH_BINARY);
+		cv::threshold(tmp2,tmp2,25,255,THRESH_BINARY);
+		cv::bitwise_and(tmp1,tmp2,silh);
+#else
+		cv::threshold(tmp2,silh,25,255,THRESH_BINARY);
+#endif
+		//更新运动
+		//imshow("silh",silh);
+		if(!mhi.data)
+			mhi = Mat::zeros(size, CV_32FC1);
+
+		if(!dst_frame.data)
+			dst_frame = Mat::zeros(size, CV_8UC1);
+		updateMotionHistory(silh, mhi, timestamp, MHI_DURATION);
+
+#if (PYR_DOWN_UP)
+		cv::Mat pyr;
+		pyr = (255. / MHI_DURATION) * mhi + ((MHI_DURATION - timestamp)*255. / MHI_DURATION);
+		cv::blur(pyr, pyr, cv::Size(3,3));
+		pyrDown(pyr, pyr);
+		//cvPyrDown(dst, pyr, CV_GAUSSIAN_5x5);// 向下采样，去掉噪声，图像是原图像的四分之一
+		dilate(pyr, pyr, cv::Mat(),cv::Point(-1,-1), 1); // 做膨胀操作，消除目标的不连续空洞   
+		pyrUp(pyr, pyr);// 向上采样，恢复图像，图像是原图像的四倍 
+		cv::threshold(pyr,pyr,1,255,THRESH_BINARY);
+		pyr.convertTo(dst_frame,CV_8UC1);
+#else
+		cv::dilate(mhi, dst_frame, cv::Mat(),cv::Point(-1,-1), 3);
+		//cv::dilate(mhi, dst_frame, cv::Mat(),cv::Point(-1,-1), 3);
+		//cv::erode(mhi, dst_frame, cv::Mat(),cv::Point(-1,-1), 3);
+		cv::erode(dst_frame, dst_frame, cv::Mat(),cv::Point(-1,-1), 3);
+		cv::threshold(dst_frame,dst_frame,1,255,THRESH_BINARY);
+		dst_frame.convertTo(dst_frame,CV_8UC1);
+#endif
+		imshow("mhi",mhi);
+		//轮廓   
+		cv::imshow( "result_window", dst_frame );
+#if (MAX_FRAME == 3)
+		cv::Mat tmp = src_frame[(iIndex-1)%MAX_FRAME].clone();
+#else
+		cv::Mat tmp = src_frame[(iIndex)%MAX_FRAME].clone();
+#endif
+		std::vector<std::vector<cv::Point> > contours;  
+		cv::findContours(dst_frame, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);    
+		std::vector<std::vector<cv::Point> >::const_iterator itContours= contours.begin();
+		for ( ; itContours!=contours.end(); ++itContours) 
+		{
+			cv::Rect rect = cv::boundingRect(*itContours);
+			if(rect.height * rect.width < CONTOUR_MAX_AERA && rect.height * rect.width > CONTOUR_MIN_AERA)
+			{
+				cv::rectangle(tmp, rect, cv::Scalar(0,0,255));
+				objectRect.push_back(rect);
+			}
+		}
+		cout << "目标数： "<<objectRect.size()<<endl;
+		for(int i=0;i<objectRect.size();i++)
+			cout<<objectRect[i]<<endl;
+		//显示结果
+		cv::imshow( "Result", tmp );
+		//cv::imshow( "source1_window", src_gray_frame[(iIndex-2)%MAX_FRAME] );
+		//cv::imshow( "source2_window", src_gray_frame[(iIndex-1)%MAX_FRAME] );
+		//cv::imshow( "source3_window", src_gray_frame[iIndex%MAX_FRAME] );
+		cv::waitKey(iDelay);
+		
+#if (USE_TRACERING)
+		if(!objectRect.empty())
+		{
+			PAUSE;
+			return 0;
+		}
+#endif
+		PAUSE;
+		iIndex ++;
+
+	}
+	//destroyAllWindows();
+	return 0;
+}
+
+int threeFrameDiff1(int &iImageIndex, vector<cv::Rect> &rect)
+{
+	cv::Mat dst_frame;
+	cv::Mat src_frame[MAX_FRAME];
+	cv::Mat src_gray_frame[MAX_FRAME];
 
 	char imgName[100];
+	cv::Mat H13, H23;
 	int iIndex = 0;
-	int iImageIndex = 0;
-	cv::Mat H12, H32;
 
 	//加载第一张图片
-	sprintf(imgName,"%simg%05d.jpg",g_ImgName,iImageIndex*VIDEO_FRAME_INTERVAL + 1);
-	src_frame[iIndex] = cv::imread(imgName, CV_LOAD_IMAGE_COLOR );
-	src_gray_frame[iIndex] = cv::imread(imgName, cv::IMREAD_GRAYSCALE);
-	if( !src_gray_frame[iIndex].data)
-		return -1;
-	cv::blur(src_gray_frame[iIndex], src_gray_frame[iIndex], cv::Size(5,5));
-	iIndex ++; iImageIndex++;
-	sprintf(imgName,"%simg%05d.jpg",g_ImgName,iImageIndex*VIDEO_FRAME_INTERVAL + 1);
-	src_frame[iIndex] = cv::imread(imgName, CV_LOAD_IMAGE_COLOR );
-	src_gray_frame[iIndex] = cv::imread(imgName, cv::IMREAD_GRAYSCALE);
-	if(!src_gray_frame[iIndex].data)
-	{
-		cout << "Data Error! " << "Total "<<iIndex*VIDEO_FRAME_INTERVAL + 1<<"! "<<endl;
-		return -1;
-	}
-	cv::blur(src_gray_frame[iIndex], src_gray_frame[iIndex], cv::Size(5,5));
+	if(readImage(iImageIndex, src_frame[iIndex], CV_LOAD_IMAGE_COLOR) == -1)return -1;
+	if(readImage(iImageIndex, src_gray_frame[iIndex], IMREAD_GRAYSCALE) == -1)return -1;
+	cv::blur(src_gray_frame[iIndex], src_gray_frame[iIndex], cv::Size(3,3));
+
+
+	//加载第二张图片
+	iImageIndex ++; iIndex += VIDEO_FRAME_INTERVAL_DETECTIVE;
+	if(readImage(iImageIndex, src_frame[iIndex], CV_LOAD_IMAGE_COLOR) == -1)return -1;
+	if(readImage(iImageIndex, src_gray_frame[iIndex], IMREAD_GRAYSCALE) == -1)return -1;
+	cv::blur(src_gray_frame[iIndex], src_gray_frame[iIndex], cv::Size(3,3));
+
 	iIndex ++;
 	while(true)
 	{			
 		//加载源图像
-		iImageIndex++;
-		memset(imgName, 0, sizeof(imgName));
-		sprintf(imgName,"%simg%05d.jpg",g_ImgName, iImageIndex*VIDEO_FRAME_INTERVAL + 1);
-		src_frame[iIndex%3] = cv::imread(imgName, CV_LOAD_IMAGE_COLOR );
-		src_gray_frame[iIndex%3] = cv::imread(imgName, cv::IMREAD_GRAYSCALE);
-		if( !src_gray_frame[iIndex%3].data )
-		{
-			cout << "Data finished! " << "Total "<< iImageIndex*VIDEO_FRAME_INTERVAL + 1 << "! "<<endl;
-			break;
-		}
+		iImageIndex += VIDEO_FRAME_INTERVAL_DETECTIVE;
+		if(readImage(iImageIndex, src_frame[iIndex%MAX_FRAME], CV_LOAD_IMAGE_COLOR) == -1)return -1;
+		if(readImage(iImageIndex, src_gray_frame[iIndex%MAX_FRAME], IMREAD_GRAYSCALE) == -1)return -1;
+	
 		//图像预处理
-		//cvtColor(src_frame2, src_gray_frame2,cv::COLOR_BGR2GRAY);
-		cv::blur(src_gray_frame[iIndex%3], src_gray_frame[iIndex%3], cv::Size(5,5));
-
+		cv::blur(src_gray_frame[iIndex%MAX_FRAME], src_gray_frame[iIndex%MAX_FRAME], cv::Size(3,3));
+		
+		cv::Mat tmp1 = src_gray_frame[(iIndex-2)%MAX_FRAME].clone(), tmp2 = src_gray_frame[(iIndex-1)%MAX_FRAME].clone();
+#if (USE_SIFT)
 		//获得透视矩阵
-		if(getHomoMatBySift(src_gray_frame[(iIndex-2)%3], src_gray_frame[(iIndex-1)%3], H12) != 0)
+		if(getHomoMatBySift(src_gray_frame[(iIndex-2)%MAX_FRAME], src_gray_frame[iIndex%MAX_FRAME], H13) != 0)
 			continue;
-		if(getHomoMatBySift(src_gray_frame[iIndex%3], src_gray_frame[(iIndex-1)%3], H32) != 0)
+		if(getHomoMatBySift(src_gray_frame[(iIndex-1)%MAX_FRAME], src_gray_frame[iIndex%MAX_FRAME], H23) != 0)
 			continue;
-		cout<<"###### Image "<< iImageIndex*VIDEO_FRAME_INTERVAL + 1 <<"\t"<<iIndex<<" #####\n\t"<< H12<<" "<<endl;
+		cout<<"Image "<< iImageIndex <<"\t\n"<< H13<<" ... "<<endl;
 
 		//变换图像
-		cv::Mat tmp1, tmp2;
-		cv::warpPerspective(src_gray_frame[(iIndex-2)%3], tmp1, H12, src_gray_frame[(iIndex-1)%3].size());
-		cv::warpPerspective(src_gray_frame[iIndex%3], tmp2, H32, src_gray_frame[(iIndex-1)%3].size());
-		//取重叠部位
+		cv::warpPerspective(src_gray_frame[(iIndex-2)%MAX_FRAME], tmp1, H13, src_gray_frame[iIndex%MAX_FRAME].size());
+		cv::warpPerspective(src_gray_frame[(iIndex-1)%MAX_FRAME], tmp2, H23, src_gray_frame[iIndex%MAX_FRAME].size());		
+#endif
+
 		//printImage(src_gray_frame1,"C:\\Users\\liupengfei\\Desktop\\1.txt");
 		//printImage(src_gray_frame2,"C:\\Users\\liupengfei\\Desktop\\2.txt");
-		
-		absdiff(tmp1,src_gray_frame[(iIndex-1)%3], tmp1);
-		absdiff(tmp2, src_gray_frame[(iIndex-1)%3], tmp2);
+		absdiff(tmp1, src_gray_frame[iIndex%MAX_FRAME], tmp1);
+		absdiff(tmp2, src_gray_frame[iIndex%MAX_FRAME], tmp2);
+		cv::threshold(tmp1,tmp1,20,255,CV_THRESH_BINARY);
+		cv::threshold(tmp2,tmp2,20,255,CV_THRESH_BINARY);
 		bitwise_and(tmp1, tmp2, dst_frame);
 
-		cv::imshow("absdiff",dst_frame);
-		cv::threshold(dst_frame,dst_frame,20,255,CV_THRESH_BINARY);
-		//cv::erode(dst_frame, dst_frame, cv::Mat());
-		cv::morphologyEx(dst_frame, dst_frame, cv::MORPH_CLOSE, cv::Mat(3,3,CV_8U,cv::Scalar(1)), cv::Point(-1,-1), 1);
-		//printImage(dst_frame,"C:\\Users\\liupengfei\\Desktop\\3.txt");
+		//cv::imshow("absdiff",dst_frame);
+		//cv::threshold(dst_frame,dst_frame,20,255,CV_THRESH_BINARY);
+		cv::erode(dst_frame, dst_frame, cv::Mat(),cv::Point(-1,-1),2);
+		//cv::morphologyEx(dst_frame, dst_frame, cv::MORPH_OPEN, cv::Mat(3,3,CV_8U,cv::Scalar(1)), cv::Point(-1,-1), 2);
+		cv::dilate(dst_frame, dst_frame, cv::Mat(),cv::Point(-1,-1),3);
+
 
 		//轮廓   
-		cv::Mat tmp = dst_frame.clone();
+		/*cv::Mat tmp = dst_frame.clone();
 		std::vector<std::vector<cv::Point> > contours;   
 		cv::findContours(tmp, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);    
 		std::vector<std::vector<cv::Point> >::const_iterator itContours= contours.begin();
 		for ( ; itContours!=contours.end(); ++itContours) 
 		{
-			cv::Rect rect = cv::boundingRect(*itContours);
-			cv::rectangle(src_frame[(iIndex-1)%3], rect, cv::Scalar(0,0,255));
-		}
+		cv::Rect rect = cv::boundingRect(*itContours);
+		cv::rectangle(src_frame[iIndex%MAX_FRAME], rect, cv::Scalar(0,0,255));
+		}*/
 
 		//显示结果
-		cv::imshow( "source1_window", src_gray_frame[(iIndex-2)%3] );
-		cv::imshow( "source2_window", src_gray_frame[(iIndex-1)%3] );
-		cv::imshow( "source3_window", src_gray_frame[iIndex%3] );
+		cv::imshow( "source1_window", src_gray_frame[(iIndex-2)%MAX_FRAME] );
+		cv::imshow( "source2_window", src_gray_frame[(iIndex-1)%MAX_FRAME] );
+		cv::imshow( "source3_window", src_gray_frame[iIndex%MAX_FRAME] );
 		cv::imshow( "result_window", dst_frame );
-		cv::imshow( "src_frame3", src_frame[(iIndex-1)%3] );
-
+		cv::imshow( "src_frame3", src_frame[iIndex%MAX_FRAME] );
 		cv::waitKey(iDelay);
 
 		iIndex ++;
@@ -462,103 +727,19 @@ int threeFrameDiff()
 	return 0;
 }
 
-int threeFrameDiff1()
-{
-	cv::Mat dst_frame;
-	cv::Mat src_frame1, src_frame2, src_frame3;
-	cv::Mat src_gray_frame1, src_gray_frame2, src_gray_frame3;
-
-	char imgName[100];
-	int iIndex = 0;
-	cv::Mat H13, H23;
-
-	//加载第一张图片
-	sprintf(imgName,"%simg%05d.jpg",g_ImgName,iIndex*VIDEO_FRAME_INTERVAL + 1);
-	src_frame1 = cv::imread(imgName, CV_LOAD_IMAGE_COLOR );
-	src_gray_frame1 = cv::imread(imgName, cv::IMREAD_GRAYSCALE);
-	iIndex ++;
-	sprintf(imgName,"%simg%05d.jpg",g_ImgName,iIndex*VIDEO_FRAME_INTERVAL + 1);
-	src_frame2 = cv::imread(imgName, CV_LOAD_IMAGE_COLOR );
-	src_gray_frame2 = cv::imread(imgName, cv::IMREAD_GRAYSCALE);
-	if( !src_gray_frame1.data || !src_gray_frame2.data)
-	{
-		cout << "Data Error! " << "Total "<<iIndex*VIDEO_FRAME_INTERVAL + 1<<"! "<<endl;
-		return -1;
-	}
-	cv::blur(src_gray_frame1, src_gray_frame1, cv::Size(3,3));
-	cv::blur(src_gray_frame2, src_gray_frame2, cv::Size(3,3));
-	while(true)
-	{			
-		//加载源图像
-		iIndex ++;
-		memset(imgName, 0, sizeof(imgName));
-		sprintf(imgName,"%simg%05d.jpg",g_ImgName,iIndex*VIDEO_FRAME_INTERVAL + 1);
-		src_frame3 = cv::imread(imgName, CV_LOAD_IMAGE_COLOR );
-		src_gray_frame3 = cv::imread(imgName, cv::IMREAD_GRAYSCALE);
-		if( !src_gray_frame3.data )
-		{
-			cout << "Data finished! " << "Total "<< iIndex*VIDEO_FRAME_INTERVAL + 1 << "! "<<endl;
-			break;
-		}
-		//图像预处理
-		cv::blur(src_gray_frame3, src_gray_frame3, cv::Size(3,3));
-
-		//获得透视矩阵
-		if(getHomoMatBySift(src_gray_frame1, src_gray_frame3, H13) != 0)
-			continue;
-		if(getHomoMatBySift(src_gray_frame2, src_gray_frame3, H23) != 0)
-			continue;
-		cout<<"Image "<< iIndex*VIDEO_FRAME_INTERVAL + 1 <<"\t\n"<< H13<<" ... "<<endl;
-
-		//变换图像
-		cv::warpPerspective(src_gray_frame1, src_gray_frame1, H13, src_gray_frame3.size());
-		cv::warpPerspective(src_gray_frame2, src_gray_frame2, H23, src_gray_frame3.size());
-		//取重叠部位
-		//printImage(src_gray_frame1,"C:\\Users\\liupengfei\\Desktop\\1.txt");
-		//printImage(src_gray_frame2,"C:\\Users\\liupengfei\\Desktop\\2.txt");
-		cv::Mat tmp1, tmp2;
-		absdiff(src_gray_frame1, src_gray_frame3, tmp1);
-		absdiff(src_gray_frame2, src_gray_frame3, tmp2);
-		bitwise_and(tmp1, tmp2, dst_frame);
-
-		cv::imshow("absdiff",dst_frame);
-		cv::threshold(dst_frame,dst_frame,20,255,CV_THRESH_BINARY);
-		//cv::erode(dst_frame, dst_frame, cv::Mat());
-		//cv::morphologyEx(dst_frame, dst_frame, cv::MORPH_OPEN, cv::Mat(3,3,CV_8U,cv::Scalar(1)), cv::Point(-1,-1), 1);
-		//printImage(dst_frame,"C:\\Users\\liupengfei\\Desktop\\3.txt");
-
-		//轮廓   
-		cv::Mat tmp = dst_frame.clone();
-		std::vector<std::vector<cv::Point> > contours;   
-		cv::findContours(tmp, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);    
-		std::vector<std::vector<cv::Point> >::const_iterator itContours= contours.begin();
-		for ( ; itContours!=contours.end(); ++itContours) 
-		{
-			cv::Rect rect = cv::boundingRect(*itContours);
-			cv::rectangle(src_frame3, rect, cv::Scalar(0,0,255));
-		}
-
-		//显示结果
-		cv::imshow( "source1_window", src_gray_frame1 );
-		cv::imshow( "source2_window", src_gray_frame2 );
-		cv::imshow( "source3_window", src_gray_frame3 );
-		cv::imshow( "result_window", dst_frame );
-		cv::imshow( "src_frame3", src_frame3 );
-		cv::waitKey(iDelay);
-
-		src_frame1 = src_frame2.clone();
-		src_gray_frame1 = src_gray_frame2.clone();
-		src_frame2 = src_frame3.clone();
-		src_gray_frame2 = src_gray_frame3;
-
-	}
-	//等待用户按键退出程序
-	cv::waitKey(0);
-}
-
 int main(int argc, char* argv[])
 {
-	threeFrameDiff();
-	
+	int iImageIndex = 1;
+	vector<cv::Rect> rect;
+	while(true)
+	{ 
+		cout<<"=====================================================\n";
+		cout << "开始检测目标 ..." << endl;
+		if(threeFrameDiff(iImageIndex, rect) == -1) break;
+		cout << "已经检测到目标, 开始跟踪 ..." << endl;
+		if(tracingByMeanshift(iImageIndex, rect) == -1)break;
+	}
+	cout << "已结束 ..." << endl;
+	getchar();
 	return 0;
 }
